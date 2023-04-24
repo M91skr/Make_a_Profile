@@ -1,4 +1,4 @@
-{% extends 'bootstrap/base.html' %}
+{% extends "base.html" %}
 {% block title %}Secrets{% endblock %}
 {% block content %}
 <div class="jumbotron">
@@ -6,6 +6,7 @@
         <h1>Welcome</h1>
         <p>Are you ready to discover my secret?</p>
         <a class="btn btn-primary btn-lg" href=" {{ url_for('login') }} ">Login</a>
+        <a class="btn btn-secondary btn-lg" href="{{ url_for('register') }}">Register</a>
     </div>
 </div>
 {% endblock %}
