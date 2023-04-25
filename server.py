@@ -9,18 +9,28 @@ Error handling: https://wtforms.readthedocs.io/en/2.3.x/crash_course/#displaying
 """
 
 # ---------------------------------------- Add Required Library ----------------------------------------
-from flask import Flask, render_template, request, url_for, redirect, send_from_directory
-from flask_login import UserMixin
+from flask import Flask, render_template, request, url_for, redirect, flash, send_from_directory
+from flask_login import UserMixin, login_user, LoginManager, login_required, current_user, logout_user
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # ----------------------------------------  Flask App Creation ----------------------------------------
-
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'any-secret-key-you-choose'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+# ---------------------------------------- User Authenticate Management ----------------------------------------
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 
 # ----------------------------------------  Database Creation ----------------------------------------
@@ -45,47 +55,55 @@ def home():
 @app.route('/register', methods=["GET", "POST"])
 def register():
     if request.method == "POST":
+        if User.query.filter_by(email=request.form.get('email')).first():
+            flash("You've already signed up with that email, log in instead!")
+            return redirect(url_for('login'))
+        hash_and_salted_password = generate_password_hash(
+            request.form.get('password'),
+            method='pbkdf2:sha256',
+            salt_length=8
+        )
         new_user = User(
             email=request.form.get('email'),
             name=request.form.get('name'),
-            password=request.form.get('password')
+            password=hash_and_salted_password
         )
         db.session.add(new_user)
         db.session.commit()
+        login_user(new_user)
         return redirect(url_for("success"))
-    return render_template("register.html")
+    return render_template("register.html", logged_in=current_user.is_authenticated)
 
 
-@app.route('/login')
+@app.route('/login', methods=["GET", "POST"])
 def login():
-    return render_template("login.html")
+    if request.method == "POST":
+        email = request.form.get('email')
+        password = request.form.get('password')
+        user = User.query.filter_by(email=email).first()
+        if check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for('success'))
+    return render_template("login.html", logged_in=current_user.is_authenticated)
 
 
 @app.route('/success')
+@login_required
 def success():
-    return render_template("success.html")
+    print(current_user.name)
+    return render_template("success.html", name=current_user.name, logged_in=True)
 
 
 @app.route('/logout')
 def logout():
-    pass
+    logout_user()
+    return redirect(url_for('home'))
 
 
 @app.route('/download')
+@login_required
 def download():
     return send_from_directory(directory='static', path="files/cheat_sheet.pdf")
-
-
-# @app.route("/login", methods=["GET", "POST"])
-# def login():
-#     login_data = LoginForm()
-#     login_data.validate_on_submit()
-#     if login_data.validate_on_submit():
-#         if login_data.email.data == "admin@email.com" and login_data.password.data == "12345678":
-#             return render_template('success.html')
-#         else:
-#             return render_template('denied.html')
-#     return render_template('login.html', form=login_data)
 
 
 if __name__ == '__main__':
